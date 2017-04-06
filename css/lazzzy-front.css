@@ -2,7 +2,7 @@
 	opacity: 0.3;
 	transition: opacity 0.4s;
 }
-.lazyload.lazyloaded {
+.lazyloaded {
 	opacity: 1;
 }
 

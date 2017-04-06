@@ -1,0 +1,14 @@
+*.DS_Store
+*._*
+
+# Windows
+*Thumbs.db
+
+# Linux
+*.thumbnails
+
+.project
+.settings
+.idea
+
+node_modules

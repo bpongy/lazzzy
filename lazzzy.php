@@ -91,12 +91,17 @@ add_action( 'wp_enqueue_scripts', 'lazzzy_scripts' );
 
 
 
-function cm_add_image_placeholders_2($content)
+function cm_add_image_placeholders($content)
 {
 	// cleaning
+	// c'est dégueux et ça risque de faire péter pas mal de trucs.
+	// à améliorer
+	// il faut se baser sur la function wp_make_content_images_responsive
 	$html = preg_replace("/\r\n|\r|\n/im", '', $content);
 	$html = preg_replace("/<noscript>.*?<\/noscript>/i", '', $html);
-	
+
+
+
 	// img attributes
 	
 	$expr = '/<img.*?src=[\'"](.*?)[\'"].*?>/i';
@@ -130,16 +135,8 @@ function cm_add_image_placeholders_2($content)
 			$image_ID = lazzzy_get_image_id_by_class( $match_classes[1] );
 			$lazzzy_thumbnail = wp_get_attachment_image_src($image_ID, 'lazzzy-thumbnail');
 
-//			echo '<pre>';
-//			var_dump($lazzzy_thumbnail);
-//			echo '</pre>';
-
 			if (isset($lazzzy_thumbnail[0]) && $lazzzy_thumbnail[0])
 				$new_image = str_replace('<img ', '<img src="'.$lazzzy_thumbnail[0].'" ', $new_image);
-
-//			echo '<pre>';
-//			var_dump(htmlentities( $new_image));
-//			echo '</pre>';
 
 		}
 		
@@ -149,18 +146,7 @@ function cm_add_image_placeholders_2($content)
 
 	
 	$html = str_replace($matches[0], $replacements, $html);
-	
-	
-	
-	// classes
-	//var_dump($matches);
-	//$image_ID = lazzzy_get_image_id_by_class($classes);
-	
-	
-	
-	
 
-	//return '<pre>'.print_r($matches, true).'</pre>----'.$html.'----';
 	return $html;
 }
 
