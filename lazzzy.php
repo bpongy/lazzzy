@@ -56,12 +56,12 @@ back:
  - textarea custom CSS
 
 TODO
-* lazzzy_get_image_id_by_class à remplacer par lazzzy_get_image_id_by_string (au cas où pas de class: on se base sur l'url)
-* <?php echo lazzzy('assets/img/kitten.png'); ?>
-* comme ajax thumbnail rebuild (bouton?)
-* ne PAS faire apparaître la taille "lazzzy-thumbnail dans les médias (lors d'une insertion d'img dans un post par exemple)"
+* [ ] lazzzy_get_image_id_by_class à remplacer par lazzzy_get_image_id_by_string (au cas où pas de class: on se base sur l'url)
+* [ ] <?php echo lazzzy('assets/img/kitten.png'); ?>
+* [ ] comme ajax thumbnail rebuild (bouton?)
+* [*] ne PAS faire apparaître la taille "lazzzy-thumbnail dans les médias (lors d'une insertion d'img dans un post par exemple)"
+* [ ] images toutes petites: pas de lazy loading
 */
-
 
 
 
@@ -71,12 +71,17 @@ add_filter( 'body_class', function( $classes ) {
 
 
 
-
 function lazzzy_thumb() {
 	add_image_size('lazzzy-thumbnail', 24, 24, false);
 }
 add_action('after_setup_theme', 'lazzzy_thumb');
 
+// hide lazzzy-thumbnail size from image size names choose
+function lazzzy_remove_image_size_name($all_img_sizes) {
+	unset($all_img_sizes['lazzzy-thumbnail']);
+	return $all_img_sizes;
+}
+add_filter('image_size_names_choose', 'lazzzy_remove_image_size_name', 999);
 
 
 
@@ -89,16 +94,14 @@ add_action( 'wp_enqueue_scripts', 'lazzzy_scripts' );
 
 
 
-
-
-function cm_add_image_placeholders($content)
+function lazzzy_add_image_placeholders($content)
 {
 	// cleaning
 	// c'est dégueux et ça risque de faire péter pas mal de trucs.
 	// à améliorer
 	// il faut se baser sur la function wp_make_content_images_responsive
 	$html = preg_replace("/\r\n|\r|\n/im", '', $content);
-	$html = preg_replace("/<noscript>.*?<\/noscript>/i", '', $html);
+	$html = preg_replace("/<noscript>.*?<\/noscript><img/i", '<img', $html);
 
 
 
@@ -135,8 +138,10 @@ function cm_add_image_placeholders($content)
 			$image_ID = lazzzy_get_image_id_by_class( $match_classes[1] );
 			$lazzzy_thumbnail = wp_get_attachment_image_src($image_ID, 'lazzzy-thumbnail');
 
+			$noscript = '<noscript>'.$image.'</noscript>';
+
 			if (isset($lazzzy_thumbnail[0]) && $lazzzy_thumbnail[0])
-				$new_image = str_replace('<img ', '<img src="'.$lazzzy_thumbnail[0].'" ', $new_image);
+				$new_image = str_replace('<img ', $noscript.'<img src="'.$lazzzy_thumbnail[0].'" ', $new_image);
 
 		}
 		
@@ -150,13 +155,7 @@ function cm_add_image_placeholders($content)
 	return $html;
 }
 
-add_filter('the_content', 'cm_add_image_placeholders', 99);
-
-
-
-
-
-
+add_filter('the_content', 'lazzzy_add_image_placeholders', 99);
 
 
 
@@ -165,10 +164,6 @@ function lazzzy_get_image_id_by_class($classes)
 	preg_match('#wp-image-(\d+)#', $classes, $matches);
 	return (isset($matches[1]) && $matches[1]) ? $matches[1] : false;
 }
-
-
-
-
 
 
 
@@ -189,14 +184,6 @@ function shortcode_lazzzy($attrs){
 	return '<img src="'.$src.'" class="'.$class.'" alt="" />';
 }
 add_shortcode('lazzzy', 'shortcode_lazzzy');
-
-
-
-
-
-
-
-
 
 
 
@@ -242,11 +229,6 @@ function lazzzy_make_thumb($src, $width=24, $quality=20) {
 	ob_end_clean();
 	return base64_encode($image_data);
 }
-
-
-
-
-
 
 
 
