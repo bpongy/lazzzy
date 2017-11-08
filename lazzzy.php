@@ -19,16 +19,14 @@
 
 
 
-
-
 /* méthode?
- * base64 d'un thumbnail généré puis stocké en BdD?
- * thumb wp
+ * base64 d'un thumbnail généré puis stocké en BdD? non. dossier "lazzzy" dans upload image
+ * thumb wp? non
  * placeholder couleur
  * placeholder span avec bg color et picto
+
+
  */
-
-
 
 
 
@@ -40,7 +38,6 @@
 // variables à définir :
 // classes images (par défaut: "lazyload")
 // taille thumbnail (par défaut: 24px)
-
 
 
 /*
@@ -59,8 +56,8 @@ TODO
 * [ ] lazzzy_get_image_id_by_class à remplacer par lazzzy_get_image_id_by_string (au cas où pas de class: on se base sur l'url)
 * [ ] <?php echo lazzzy('assets/img/kitten.png'); ?>
 * [ ] comme ajax thumbnail rebuild (bouton?)
-* [*] ne PAS faire apparaître la taille "lazzzy-thumbnail dans les médias (lors d'une insertion d'img dans un post par exemple)"
 * [ ] images toutes petites: pas de lazy loading
+* [ ] et si on a inséré une photo croppée?
 */
 
 
@@ -90,145 +87,148 @@ function lazzzy_scripts() {
 	wp_enqueue_script( 'lazysizes', plugins_url( 'js/lazysizes.min.js', __FILE__ ), array(), '3.0.0', true );
 	wp_enqueue_script( 'lazzzy_front', plugins_url( 'js/lazzzy-front.js', __FILE__ ), array(), '1.0.0', true );
 }
-add_action( 'wp_enqueue_scripts', 'lazzzy_scripts' );
+//add_action( 'wp_enqueue_scripts', 'lazzzy_scripts' );
 
 
 
-function lazzzy_add_image_placeholders($content)
-{
-	// cleaning
-	// c'est dégueux et ça risque de faire péter pas mal de trucs.
-	// à améliorer
-	// il faut se baser sur la function wp_make_content_images_responsive
-	$html = preg_replace("/\r\n|\r|\n/im", '', $content);
-	$html = preg_replace("/<noscript>.*?<\/noscript><img/i", '<img', $html);
 
 
+if (!class_exists('Lazzzy')) {
 
-	// img attributes
-	
-	$expr = '/<img.*?src=[\'"](.*?)[\'"].*?>/i';
-	preg_match_all($expr, $html, $matches);
-	
-	$replacements = array();
-	
-	foreach ($matches[0] as $k=>$image)
-	{
-		// $element->class = 'lazyload lazy-opacity ' . $element->class
-		$hasClass = strpos($image, ' class="');
-		if ($hasClass)
-			$new_image = str_replace(' class="', ' class="lazyload ', $image);
-		else {
-			$new_image = str_replace(' src="', ' class="lazyload" src="', $image);
+	class Lazzzy {
+
+		const version = '0.0.2';
+
+		function __construct() {
+			if (is_admin())
+				return;
+			add_action('wp_enqueue_scripts', array($this, 'lazzzy_scripts'));
+
+			add_filter('the_content', array($this, 'go_lazzzy'), 99);
+			add_filter('post_thumbnail_html', array($this, 'go_lazzzy'), 11);
+			add_filter('widget_text', array($this, 'go_lazzzy'), 11);
+			add_filter('get_avatar', array($this, 'go_lazzzy' ), 11);
 		}
 
-		// src -> data-src
-		$new_image = str_replace(' src=', ' data-src=', $new_image);
-		// srcsrcset -> data-srcsrcset
-		$new_image = str_replace(' srcset=', ' data-srcset=', $new_image);
-		
-		
-		//$image_ID = lazzzy_get_image_id_by_class($element->class);
-		//$image_src = wp_get_attachment_image_src($image_ID, 'lazzzy-thumbnail');
-		//$element->src = $image_src[0];
-		$get_classes = '/<img.*?class=[\'"](.*?)[\'"].*?>/i';
-		preg_match($get_classes, $new_image, $match_classes);
-
-		if (isset($match_classes[1])) {
-			$image_ID = lazzzy_get_image_id_by_class( $match_classes[1] );
-			$lazzzy_thumbnail = wp_get_attachment_image_src($image_ID, 'lazzzy-thumbnail');
-
-			$noscript = '<noscript>'.$image.'</noscript>';
-
-			if (isset($lazzzy_thumbnail[0]) && $lazzzy_thumbnail[0])
-				$new_image = str_replace('<img ', $noscript.'<img src="'.$lazzzy_thumbnail[0].'" ', $new_image);
-
+		function lazzzy_scripts() {
+			wp_enqueue_script( 'lazysizes',  plugins_url( 'js/lazysizes.min.js', __FILE__ ), array(), '4.0.1', true );
+			wp_enqueue_style( 'lazzzy_front', plugins_url( 'css/lazzzy-front.css', __FILE__ ), array(), '1.0.0' );
+			wp_enqueue_script( 'lazzzy_front', plugins_url( 'js/lazzzy-front.js', __FILE__ ), array('jquery'), '1.0.0', true );
 		}
-		
-		$replacements[$k] = $new_image;
-		
+
+		function go_lazzzy( $content ) {
+
+			if( is_feed()
+			    || is_preview()
+			    || strpos( $_SERVER['HTTP_USER_AGENT'], 'Opera Mini' )
+				|| intval( get_query_var( 'print' ) ) == 1
+				|| intval( get_query_var( 'printpage' ) ) == 1
+			) return $content;
+
+
+
+			$respReplace = 'data-sizes="auto" data-srcset=';
+
+			$matches = array();
+			$skip_images_regex = '/class=".*lazyload.*"/';
+
+			//$placeholder_image = apply_filters( 'lazysizes_placeholder_image', 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==' );
+
+			preg_match_all( '/<img\s+.*?>/', $content, $matches );
+			$search = array();
+			$replace = array();
+			foreach ( $matches[0] as $imgHTML ) {
+				// Don't to the replacement if a skip class is provided and the image has the class.
+				if ( ! ( preg_match( $skip_images_regex, $imgHTML ) ) ) {
+
+					$image_ID = $this->lazzzy_get_image_id_by_class( $imgHTML );
+					$placeholder_image = $this->get_lazzzy_image_src($image_ID, 'thumbnail');
+
+					$replaceHTML = preg_replace( '/<img(.*?)src=/i',
+						'<img$1src="' . $placeholder_image . '" data-src=', $imgHTML );
+					$replaceHTML = preg_replace( '/srcset=/i', $respReplace, $replaceHTML );
+					$replaceHTML = $this->_add_class( $replaceHTML, 'lazzzy lazyload' );
+					$replaceHTML .= '<noscript>' . $imgHTML . '</noscript>';
+
+
+
+					array_push( $search, $imgHTML );
+					array_push( $replace, $replaceHTML );
+				}
+			}
+			$content = str_replace( $search, $replace, $content );
+
+
+			return $content;
+		}
+
+		private function _add_class( $htmlString = '', $newClass ) {
+			$pattern = '/class="([^"]*)"/';
+			// Class attribute set.
+			if ( preg_match( $pattern, $htmlString, $matches ) ) {
+				$definedClasses = explode( ' ', $matches[1] );
+				if ( ! in_array( $newClass, $definedClasses ) ) {
+					$definedClasses[] = $newClass;
+					$htmlString = str_replace(
+						$matches[0],
+						sprintf( 'class="%s"', implode( ' ', $definedClasses ) ),
+						$htmlString
+					);
+				}
+				// Class attribute not set.
+			} else {
+				$htmlString = preg_replace( '/(\<.+\s)/', sprintf( '$1class="%s" ', $newClass ), $htmlString );
+			}
+			return $htmlString;
+		}
+
+		private function lazzzy_get_image_id_by_class($classes)
+		{
+			preg_match('#wp-image-(\d+)#', $classes, $matches);
+			return (isset($matches[1]) && $matches[1]) ? $matches[1] : false;
+		}
+
+		private function get_lazzzy_image_src($id) {
+			$updir = wp_upload_dir();
+			$lazzzy_upload_dir = $updir['basedir'].'/lazzzy';
+
+			$origin = wp_get_attachment_image_src($id, 'full');
+			$path_parts = pathinfo($origin[0]);
+			$ext = $path_parts['extension'];
+
+			$image = wp_get_image_editor($origin[0]);
+			if ( ! is_wp_error( $image ) ) {
+				$image->resize( 50, 50, false );
+				$image->set_quality(50);
+				$image->save($lazzzy_upload_dir.'/'.$id.'.'.$ext);
+
+				$image_src = $updir['baseurl'].'/lazzzy/'.$id.'.'.$ext;
+
+				return $image_src;
+
+			}
+
+			return 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+		}
+
 	}
 
-	
-	$html = str_replace($matches[0], $replacements, $html);
+	$lazzzy = new Lazzzy();
 
-	return $html;
-}
-
-add_filter('the_content', 'lazzzy_add_image_placeholders', 99);
-
-
-
-function lazzzy_get_image_id_by_class($classes)
-{
-	preg_match('#wp-image-(\d+)#', $classes, $matches);
-	return (isset($matches[1]) && $matches[1]) ? $matches[1] : false;
 }
 
 
 
-// shortcode !
-function shortcode_lazzzy($attrs){
-	extract(shortcode_atts(array(
-		'src' => false,
-		'class' => 'lazyload '
-	), $attrs));
-
-	if (!$src)
-		return;
 
 
 
 
 
-	return '<img src="'.$src.'" class="'.$class.'" alt="" />';
-}
-add_shortcode('lazzzy', 'shortcode_lazzzy');
 
 
 
-function lazzzy_make_thumb($src, $width=24, $quality=20) {
-
-	/* read the source image */
-	$ext = strtolower(pathinfo($src, PATHINFO_EXTENSION));
-	if ($ext == 'jpg' || $ext == 'jpeg')
-		$source_image = imagecreatefromjpeg($src);
-	if ($ext == 'gif')
-		$source_image = imagecreatefromgif($src);
-	if ($ext == 'png')
-		$source_image = imagecreatefrompng($src);
-
-	if (intval($width))
-	{
-		/* find the "desired height" of this thumbnail, relative to the desired width  */
-		$desired_height = floor( $width * imagesy($source_image) / imagesx($source_image) );
-	} else {
-		$width = 1;
-		$desired_height = 1;
-	}
 
 
-
-	/* create a new, "virtual" image */
-	$virtual_image = imagecreatetruecolor($width, $desired_height);
-
-	/* copy source image at a resized size */
-	imagecopyresampled($virtual_image, $source_image, 0, 0, 0, 0, $width, $desired_height, imagesx($source_image), imagesy($source_image));
-
-	/* create the physical thumbnail image to its destination */
-	ob_start();
-
-	// temp
-//	$dominant_color = lazzzy_get_dominant_color($virtual_image);
-//	$one_color = imagecolorallocate($virtual_image, $dominant_color[0], $dominant_color[1], $dominant_color[2]);
-//	imagefill($virtual_image, 0, 0, $one_color);
-
-	imagepng($virtual_image, null, 0);
-
-	$image_data = ob_get_contents();
-	ob_end_clean();
-	return base64_encode($image_data);
-}
 
 
 
