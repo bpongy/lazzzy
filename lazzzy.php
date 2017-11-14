@@ -24,8 +24,10 @@
  * thumb wp? non
  * placeholder couleur
  * placeholder span avec bg color et picto
-
-
+ *
+ *
+ *
+ * ==> à utiliser? https://wpscholar.com/blog/get-attachment-id-from-wp-image-url/
  */
 
 
@@ -142,7 +144,8 @@ if (!class_exists('Lazzzy')) {
 				if ( ! ( preg_match( $skip_images_regex, $imgHTML ) ) ) {
 
 					$image_ID = $this->lazzzy_get_image_id_by_class( $imgHTML );
-					$placeholder_image = $this->get_lazzzy_image_src($image_ID, 'thumbnail');
+					$image_size = $this->lazzzy_get_image_size_by_class( $imgHTML );
+					$placeholder_image = $this->get_lazzzy_image_src($image_ID, $image_size);
 
 					$replaceHTML = preg_replace( '/<img(.*?)src=/i',
 						'<img$1src="' . $placeholder_image . '" data-src=', $imgHTML );
@@ -188,24 +191,33 @@ if (!class_exists('Lazzzy')) {
 			return (isset($matches[1]) && $matches[1]) ? $matches[1] : false;
 		}
 
-		private function get_lazzzy_image_src($id) {
+		private function lazzzy_get_image_size_by_class($classes)
+		{
+			preg_match('#size-([\w-]*)#', $classes, $matches);
+			return (isset($matches[1]) && $matches[1]) ? $matches[1] : false;
+		}
+
+		private function get_lazzzy_image_src($id, $taille) {
 			$updir = wp_upload_dir();
 			$lazzzy_upload_dir = $updir['basedir'].'/lazzzy';
 
-			$origin = wp_get_attachment_image_src($id, 'full');
-			$path_parts = pathinfo($origin[0]);
-			$ext = $path_parts['extension'];
+			$origin = wp_get_attachment_image_src($id, $taille);
 
-			$image = wp_get_image_editor($origin[0]);
-			if ( ! is_wp_error( $image ) ) {
-				$image->resize( 50, 50, false );
-				$image->set_quality(50);
-				$image->save($lazzzy_upload_dir.'/'.$id.'.'.$ext);
+			if ($origin) {
+				$path_parts = pathinfo($origin[0]);
+				$ext = $path_parts['extension'];
 
-				$image_src = $updir['baseurl'].'/lazzzy/'.$id.'.'.$ext;
+				$image = wp_get_image_editor($origin[0]);
+				if ( ! is_wp_error( $image ) ) {
+					$image->resize( 50, 50, false );
+					$image->set_quality(50);
+					$image->save($lazzzy_upload_dir.'/'.$id.'-'.$taille.'.'.$ext);
 
-				return $image_src;
+					$image_src = $updir['baseurl'].'/lazzzy/'.$id.'.'.$ext;
 
+					return $image_src;
+
+				}
 			}
 
 			return 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
